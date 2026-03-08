@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -8,15 +8,20 @@ import { CreateProjectDialog } from "./CreateProjectDialog";
 import { useProjects, useSelectedProject } from "../hooks/useProjects";
 
 interface ProjectsPanelProps {
+  onProjectChange?: (id: string | null) => void;
   children?: (selectedProjectId: string | null) => ReactNode;
 }
 
-export function ProjectsPanel({ children }: ProjectsPanelProps) {
+export function ProjectsPanel({ onProjectChange, children }: ProjectsPanelProps) {
   const { projects, isLoading, isError, refetch, createProject, isCreating } =
     useProjects();
   const { selectedProject, selectedId, selectProject } =
     useSelectedProject(projects);
   const [dialogOpen, setDialogOpen] = useState(false);
+
+  useEffect(() => {
+    onProjectChange?.(selectedId);
+  }, [selectedId, onProjectChange]);
 
   const handleCreate = async (name: string) => {
     const result = await createProject({ name });

@@ -26,10 +26,15 @@ export async function chunkDocuments(
     separators: ['\n\n', '\n', '. ', ' ', ''],
   });
 
-  const chunks = await splitter.splitDocuments(documents);
+  const rawChunks = await splitter.splitDocuments(documents);
+
+  // Discard whitespace-only chunks — these come from scanned/image-based PDFs where
+  // pdf-parse finds no real text. Keeping them would cause the embedding API to reject
+  // the empty strings and return zero-dimensional vectors.
+  const chunks = rawChunks.filter((c) => c.pageContent.trim().length > 0);
 
   logger.info(
-    { inputDocs: documents.length, outputChunks: chunks.length, chunkSize, chunkOverlap },
+    { inputDocs: documents.length, rawChunks: rawChunks.length, outputChunks: chunks.length, chunkSize, chunkOverlap },
     'Documents chunked',
   );
 

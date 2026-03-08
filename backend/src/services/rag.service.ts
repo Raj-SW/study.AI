@@ -60,7 +60,12 @@ export async function answerQuestion({
 
   const human = new HumanMessage({ content: `Question: ${question}\n\nContext:\n${context}` });
 
-  const llm = new ChatGoogleGenerativeAI({ apiKey: config.GOOGLE_API_KEY, model: 'gemini-pro', maxOutputTokens: 1024 });
+  const llm = new ChatGoogleGenerativeAI({
+    apiKey: config.GOOGLE_API_KEY,
+    model: 'gemini-2.0-flash-lite',
+    maxOutputTokens: 1024,
+    maxRetries: 1, // default is 6 — reduce to avoid burning through free-tier quota on failures
+  });
 
   let responseText = '';
   try {
