@@ -55,31 +55,26 @@ export async function answerQuestion({
   // System instructions: answer from provided context and cite sources
   const system = new SystemMessage({
     content:
-      'You are an assistant that answers user questions using the provided context. Only use the information in the context and cite sources in the form [docId:chunkIndex]. If the answer is not contained in the context, say you don\'t know.',
+      'You are an assistant that answers user questions using the provided context. Only use the information in the context. Do not include source citations or document references in your answer — sources are provided separately. If the answer is not contained in the context, say you don\'t know.',
   });
 
   const human = new HumanMessage({ content: `Question: ${question}\n\nContext:\n${context}` });
 
   const llm = new ChatGoogleGenerativeAI({
     apiKey: config.GOOGLE_API_KEY,
-    model: 'gemini-2.0-flash-lite',
-    maxOutputTokens: 1024,
-    maxRetries: 1, // default is 6 — reduce to avoid burning through free-tier quota on failures
+    model: 'gemini-2.5-flash',
+    maxOutputTokens: 8192,
+    maxRetries: 1,
   });
 
   let responseText = '';
   try {
     const res = await llm.invoke([system, human] as any);
-    // Best-effort extraction of text
-    if (typeof res === 'string') {
-      responseText = res;
-    } else if (res?.toString) {
-      responseText = res.toString();
-    } else if (Array.isArray((res as any).generations)) {
-      responseText = JSON.stringify((res as any).generations);
-    } else {
-      responseText = String(res);
-    }
+    responseText = typeof res.content === 'string'
+      ? res.content
+      : Array.isArray(res.content)
+        ? res.content.map((c: any) => (typeof c === 'string' ? c : c.text ?? '')).join('')
+        : String(res.content);
   } catch (err) {
     logger.error({ err, projectId, userId }, 'LLM generation failed');
     throw err;

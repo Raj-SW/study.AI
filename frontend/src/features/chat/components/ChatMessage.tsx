@@ -19,7 +19,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
             : "rounded-bl-sm bg-muted text-foreground"
         )}
       >
-        <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+        <p className="whitespace-pre-wrap break-words leading-relaxed">{message.content}</p>
       </div>
 
       {!isUser && message.sources && message.sources.length > 0 && (
