@@ -1,24 +1,66 @@
 import express from 'express';
 import { answerQuestion } from '../../services/rag.service';
+import { getHistory, saveExchange } from './chat.service';
 import { logger } from '../../lib/logger';
 
-export async function handleChat(req: express.Request, res: express.Response) {
+/**
+ * GET /api/projects/:projectId/chat
+ * Returns the full conversation history for this project/user.
+ */
+export async function listHistory(req: express.Request, res: express.Response): Promise<void> {
   const rawProjectId = req.params.projectId;
   const projectId = Array.isArray(rawProjectId) ? rawProjectId[0] : rawProjectId ?? '';
-  const userId = req.user?.id;
-  const { question } = req.body as { question?: string };
-
-  if (!question || question.trim().length === 0) {
-    return res.status(400).json({ error: 'question is required' });
-  }
+  const userId = req.user!.id;
 
   try {
-    const result = await answerQuestion({ projectId, userId, question });
-    return res.json(result);
+    const messages = await getHistory(projectId, userId);
+    res.json({ messages });
   } catch (err) {
-    logger.error({ err, projectId, userId }, 'Chat handler failed');
-    return res.status(500).json({ error: 'failed to generate answer' });
+    logger.error({ err, projectId, userId }, 'Failed to fetch chat history');
+    res.status(500).json({ error: 'failed to fetch chat history' });
   }
 }
 
-export default { handleChat };
+/**
+ * POST /api/projects/:projectId/chat
+ * Answers a question using RAG + conversation history, then persists the exchange.
+ */
+export async function handleChat(req: express.Request, res: express.Response): Promise<void> {
+  const rawProjectId = req.params.projectId;
+  const projectId = Array.isArray(rawProjectId) ? rawProjectId[0] : rawProjectId ?? '';
+  const userId = req.user!.id;
+  const { question } = req.body as { question?: string };
+
+  if (!question || question.trim().length === 0) {
+    res.status(400).json({ error: 'question is required' });
+    return;
+  }
+
+  try {
+    // Load conversation history (last 20 messages = 10 turns)
+    const history = await getHistory(projectId, userId);
+
+    // Generate answer with full history for context-aware follow-ups
+    const result = await answerQuestion({ projectId, userId, question, history });
+
+    // Persist both the user question and assistant answer atomically
+    const { userMessage, assistantMessage } = await saveExchange(
+      projectId,
+      userId,
+      question,
+      result,
+    );
+
+    res.json({
+      answer: result.answer,
+      sources: result.sources,
+      userMessage,
+      assistantMessage,
+    });
+  } catch (err) {
+    logger.error({ err, projectId, userId }, 'Chat handler failed');
+    res.status(500).json({ error: 'failed to generate answer' });
+  }
+}
+
+export default { listHistory, handleChat };

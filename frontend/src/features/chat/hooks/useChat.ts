@@ -7,9 +7,27 @@ export function useChat(projectId: string | null) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Clear conversation when switching projects
+  // Load conversation history from server when project changes
   useEffect(() => {
-    setMessages([]);
+    if (!projectId) {
+      setMessages([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    chatApi
+      .getHistory(projectId)
+      .then((res) => {
+        if (!cancelled) setMessages(res.messages);
+      })
+      .catch(() => {
+        if (!cancelled) setMessages([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [projectId]);
 
   const sendMessage = useCallback(
@@ -17,31 +35,31 @@ export function useChat(projectId: string | null) {
       if (!projectId || !question.trim()) return;
 
       const trimmed = question.trim();
+      const tempId = crypto.randomUUID();
 
+      // Optimistic user message for instant feedback
       setMessages((prev) => [
         ...prev,
-        { id: crypto.randomUUID(), role: "user", content: trimmed },
+        { id: tempId, role: "USER", content: trimmed },
       ]);
       setIsLoading(true);
 
       try {
         const response = await chatApi.send(projectId, { question: trimmed });
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: crypto.randomUUID(),
-            role: "assistant",
-            content: response.answer,
-            sources: response.sources,
-          },
-        ]);
+        // Replace optimistic message with server-confirmed pair
+        setMessages((prev) =>
+          prev
+            .filter((m) => m.id !== tempId)
+            .concat([response.userMessage, response.assistantMessage])
+        );
       } catch {
         toast.error("Failed to get an answer. Please try again.");
+        // Keep the optimistic user message so the user can see what they asked
         setMessages((prev) => [
           ...prev,
           {
             id: crypto.randomUUID(),
-            role: "assistant",
+            role: "ASSISTANT",
             content: "Sorry, something went wrong. Please try again.",
           },
         ]);

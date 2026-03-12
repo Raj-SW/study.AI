@@ -2,8 +2,9 @@ import { getEmbeddings } from './ingestion/embeddings';
 import { getVectorStore } from './ingestion/vectorStore';
 import { config } from '../config';
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
-import { HumanMessage, SystemMessage } from '@langchain/core/messages';
+import { AIMessage, HumanMessage, SystemMessage, BaseMessage } from '@langchain/core/messages';
 import { logger } from '../lib/logger';
+import type { ChatMessageResponse } from '../modules/chat/chat.types';
 
 export interface AnswerResult {
   answer: string;
@@ -19,10 +20,12 @@ export async function answerQuestion({
   projectId,
   userId,
   question,
+  history = [],
 }: {
   projectId: string;
   userId: string;
   question: string;
+  history?: ChatMessageResponse[];
 }): Promise<AnswerResult> {
   const embeddings = getEmbeddings();
 
@@ -47,18 +50,32 @@ export async function answerQuestion({
     };
   });
 
-  // Build context string
+  // Build context string from retrieved chunks
   const context = sources
     .map((s, i) => `Source ${i + 1} (doc:${s.documentId} chunk:${s.chunkIndex} score:${s.score.toFixed(6)})\n${s.content}`)
     .join('\n\n---\n\n');
 
-  // System instructions: answer from provided context and cite sources
+  // System instructions: ground answers in context, leverage history for follow-ups
   const system = new SystemMessage({
     content:
-      'You are an assistant that answers user questions using the provided context. Only use the information in the context. Do not include source citations or document references in your answer — sources are provided separately. If the answer is not contained in the context, say you don\'t know.',
+      'You are a study assistant that answers questions using the provided context from the user\'s documents. ' +
+      'Use the conversation history to understand follow-up questions and resolve pronouns like "it", "that", or "they". ' +
+      'Only use information from the provided context. ' +
+      'Do not include source citations or document references in your answer — sources are provided separately. ' +
+      'If the answer is not contained in the context, say you don\'t know.',
   });
 
-  const human = new HumanMessage({ content: `Question: ${question}\n\nContext:\n${context}` });
+  // Build history messages (USER → HumanMessage, ASSISTANT → AIMessage)
+  const historyMessages: BaseMessage[] = history.map((msg) =>
+    msg.role === 'USER'
+      ? new HumanMessage({ content: msg.content })
+      : new AIMessage({ content: msg.content }),
+  );
+
+  // Current turn: inject the retrieved context into the human message
+  const currentHuman = new HumanMessage({
+    content: `Question: ${question}\n\nContext:\n${context}`,
+  });
 
   const llm = new ChatGoogleGenerativeAI({
     apiKey: config.GOOGLE_API_KEY,
@@ -69,7 +86,7 @@ export async function answerQuestion({
 
   let responseText = '';
   try {
-    const res = await llm.invoke([system, human] as any);
+    const res = await llm.invoke([system, ...historyMessages, currentHuman] as any);
     responseText = typeof res.content === 'string'
       ? res.content
       : Array.isArray(res.content)

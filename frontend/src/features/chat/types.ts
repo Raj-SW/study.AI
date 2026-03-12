@@ -1,16 +1,19 @@
-export type MessageRole = "user" | "assistant";
+export type MessageRole = "USER" | "ASSISTANT";
 
 export interface ChatSource {
   documentId: string;
-  filename: string;
   chunkIndex?: number;
+  score?: number;
+  content?: string;
+  filename?: string;
 }
 
 export interface ChatMessage {
   id: string;
   role: MessageRole;
   content: string;
-  sources?: ChatSource[];
+  sources?: ChatSource[] | null;
+  createdAt?: string;
 }
 
 export interface ChatRequest {
@@ -20,4 +23,10 @@ export interface ChatRequest {
 export interface ChatResponse {
   answer: string;
   sources: ChatSource[];
+  userMessage: ChatMessage;
+  assistantMessage: ChatMessage;
+}
+
+export interface ChatHistoryResponse {
+  messages: ChatMessage[];
 }

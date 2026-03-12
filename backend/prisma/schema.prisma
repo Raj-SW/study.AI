@@ -26,8 +26,9 @@ model Project {
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
 
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  documents Document[]
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documents    Document[]
+  chatMessages ChatMessage[]
 
   @@unique([userId, name])
   @@index([userId])
@@ -60,4 +61,24 @@ model Document {
   @@index([projectId, status])
   @@index([userId])
   @@map("documents")
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+}
+
+model ChatMessage {
+  id        String      @id @default(uuid())
+  projectId String      @map("project_id")
+  userId    String      @map("user_id")
+  role      MessageRole
+  content   String
+  sources   Json?       // populated for ASSISTANT messages only
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, userId, createdAt])
+  @@map("chat_messages")
 }
