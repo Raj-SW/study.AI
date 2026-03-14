@@ -69,4 +69,17 @@ export const httpClient = {
     });
     return handleResponse<T>(response);
   },
+
+  async delete<T = void>(path: string, options?: RequestInit): Promise<T> {
+    const response = await fetch(buildUrl(path), {
+      ...options,
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders(),
+        ...options?.headers,
+      },
+    });
+    return handleResponse<T>(response);
+  },
 };

@@ -6,9 +6,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 interface DocumentListProps {
   documents: DocumentItem[];
   isLoading: boolean;
+  onDelete?: (documentId: string) => void;
 }
 
-export function DocumentList({ documents, isLoading }: DocumentListProps) {
+export function DocumentList({ documents, isLoading, onDelete }: DocumentListProps) {
   if (isLoading) {
     return (
       <div className="space-y-2 p-2">
@@ -32,7 +33,7 @@ export function DocumentList({ documents, isLoading }: DocumentListProps) {
       <div className="space-y-0.5 p-2" role="list" aria-label="Documents">
         {documents.map((doc) => (
           <div key={doc.id} role="listitem">
-            <DocumentRow document={doc} />
+            <DocumentRow document={doc} onDelete={onDelete ? () => onDelete(doc.id) : undefined} />
           </div>
         ))}
       </div>

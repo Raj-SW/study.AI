@@ -1,6 +1,6 @@
 import express from 'express';
 import { answerQuestion } from '../../services/rag.service';
-import { getHistory, saveExchange } from './chat.service';
+import { getHistory, saveExchange, clearHistory } from './chat.service';
 import { logger } from '../../lib/logger';
 
 /**
@@ -63,4 +63,22 @@ export async function handleChat(req: express.Request, res: express.Response): P
   }
 }
 
-export default { listHistory, handleChat };
+/**
+ * DELETE /api/projects/:projectId/chat
+ * Clears the full conversation history for this project/user.
+ */
+export async function clearChatHistory(req: express.Request, res: express.Response): Promise<void> {
+  const rawProjectId = req.params.projectId;
+  const projectId = Array.isArray(rawProjectId) ? rawProjectId[0] : rawProjectId ?? '';
+  const userId = req.user!.id;
+
+  try {
+    await clearHistory(projectId, userId);
+    res.status(204).send();
+  } catch (err) {
+    logger.error({ err, projectId, userId }, 'Failed to clear chat history');
+    res.status(500).json({ error: 'failed to clear chat history' });
+  }
+}
+
+export default { listHistory, handleChat, clearChatHistory };

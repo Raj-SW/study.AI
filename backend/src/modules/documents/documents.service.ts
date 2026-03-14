@@ -99,3 +99,30 @@ export async function getDocumentFilepath(
 
   return doc.filepath;
 }
+
+export async function deleteDocument(
+  documentId: string,
+  userId: string,
+): Promise<void> {
+  const doc = await prisma.document.findFirst({
+    where: { id: documentId, userId },
+    select: { id: true },
+  });
+
+  if (!doc) {
+    throw new NotFoundError('Document', documentId);
+  }
+
+  await prisma.document.delete({ where: { id: documentId } });
+}
+
+export async function listDocumentFilepaths(
+  projectId: string,
+  userId: string,
+): Promise<string[]> {
+  const docs = await prisma.document.findMany({
+    where: { projectId, userId },
+    select: { filepath: true },
+  });
+  return docs.map((d) => d.filepath);
+}

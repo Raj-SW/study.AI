@@ -13,4 +13,9 @@ export const chatApi = {
       `/projects/${encodeURIComponent(projectId)}/chat`
     );
   },
+  clearHistory(projectId: string): Promise<void> {
+    return httpClient.delete(
+      `/projects/${encodeURIComponent(projectId)}/chat`
+    );
+  },
 };

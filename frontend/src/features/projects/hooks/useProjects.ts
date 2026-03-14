@@ -28,6 +28,17 @@ export function useProjects() {
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: projectsApi.delete,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: PROJECTS_KEY });
+      toast.success("Project deleted");
+    },
+    onError: () => {
+      toast.error("Failed to delete project. Please try again.");
+    },
+  });
+
   return {
     projects: query.data ?? [],
     isLoading: query.isLoading,
@@ -36,6 +47,8 @@ export function useProjects() {
     refetch: query.refetch,
     createProject: createMutation.mutateAsync,
     isCreating: createMutation.isPending,
+    deleteProject: deleteMutation.mutateAsync,
+    isDeleting: deleteMutation.isPending,
   };
 }
 

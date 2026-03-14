@@ -69,3 +69,15 @@ export async function saveExchange(
     assistantMessage: toResponse(assistantMsg),
   };
 }
+
+/**
+ * Delete all chat messages for a project/user.
+ */
+export async function clearHistory(
+  projectId: string,
+  userId: string,
+): Promise<void> {
+  await prisma.chatMessage.deleteMany({
+    where: { projectId, userId },
+  });
+}

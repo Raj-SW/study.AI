@@ -2,7 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import * as documentsController from './documents.controller';
 import { validate } from '../../middleware/validate';
-import { projectIdParamSchema } from './documents.schema';
+import { projectIdParamSchema, documentAndProjectParamSchema } from './documents.schema';
 import { uploadLimiter } from '../../middleware/rateLimiter';
 import { config } from '../../config';
 
@@ -35,6 +35,12 @@ router.post(
   upload.single('file'),
   validate(projectIdParamSchema, 'params'),
   documentsController.uploadDocument,
+);
+
+router.delete(
+  '/:documentId',
+  validate(documentAndProjectParamSchema, 'params'),
+  documentsController.deleteDocument,
 );
 
 export { router as documentsRouter };

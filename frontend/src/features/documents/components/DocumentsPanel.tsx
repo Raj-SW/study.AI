@@ -17,6 +17,7 @@ export function DocumentsPanel({ projectId, onKbStatusChange }: DocumentsPanelPr
     refetch,
     uploadDocument,
     isUploading,
+    deleteDocument,
   } = useDocuments(projectId);
 
   // Notify parent of KB status changes
@@ -60,7 +61,11 @@ export function DocumentsPanel({ projectId, onKbStatusChange }: DocumentsPanelPr
           </Button>
         </div>
       ) : (
-        <DocumentList documents={documents} isLoading={isLoading} />
+        <DocumentList
+          documents={documents}
+          isLoading={isLoading}
+          onDelete={(documentId) => deleteDocument({ documentId })}
+        />
       )}
     </div>
   );

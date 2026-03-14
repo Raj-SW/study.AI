@@ -1,5 +1,5 @@
 import express from 'express';
-import { handleChat, listHistory } from './chat.controller';
+import { handleChat, listHistory, clearChatHistory } from './chat.controller';
 
 export const chatRouter = express.Router({ mergeParams: true });
 
@@ -8,5 +8,8 @@ chatRouter.get('/', listHistory);
 
 // POST /api/projects/:projectId/chat  — ask a question
 chatRouter.post('/', handleChat);
+
+// DELETE /api/projects/:projectId/chat  — clear conversation history
+chatRouter.delete('/', clearChatHistory);
 
 export default chatRouter;

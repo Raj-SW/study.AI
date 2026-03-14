@@ -67,3 +67,20 @@ export async function verifyProjectOwnership(
     throw new NotFoundError('Project', projectId);
   }
 }
+
+export async function deleteProject(
+  projectId: string,
+  userId: string,
+): Promise<void> {
+  const project = await prisma.project.findFirst({
+    where: { id: projectId, userId },
+    select: { id: true },
+  });
+
+  if (!project) {
+    throw new NotFoundError('Project', projectId);
+  }
+
+  // Cascades documents and chat messages in DB (onDelete: Cascade in schema)
+  await prisma.project.delete({ where: { id: projectId } });
+}

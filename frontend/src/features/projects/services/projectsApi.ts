@@ -13,4 +13,8 @@ export const projectsApi = {
   create(data: CreateProjectRequest): Promise<CreateProjectResponse> {
     return httpClient.post<CreateProjectResponse>("/projects", { body: data });
   },
+
+  delete(projectId: string): Promise<void> {
+    return httpClient.delete(`/projects/${encodeURIComponent(projectId)}`);
+  },
 };

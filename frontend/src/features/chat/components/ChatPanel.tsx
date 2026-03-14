@@ -11,7 +11,7 @@ interface ChatPanelProps {
 }
 
 export function ChatPanel({ projectId }: ChatPanelProps) {
-  const { messages, sendMessage, isLoading, clearMessages } = useChat(projectId);
+  const { messages, sendMessage, isLoading, clearHistory } = useChat(projectId);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -24,7 +24,7 @@ export function ChatPanel({ projectId }: ChatPanelProps) {
       <div className="flex shrink-0 items-center justify-between border-b px-4 py-3">
         <h2 className="text-sm font-semibold">Chat</h2>
         {messages.length > 0 && (
-          <Button variant="ghost" size="sm" onClick={clearMessages} aria-label="Clear conversation">
+          <Button variant="ghost" size="sm" onClick={clearHistory} aria-label="Clear conversation">
             <Trash2 className="size-4" />
             <span className="ml-1 text-xs">Clear</span>
           </Button>

@@ -16,4 +16,10 @@ export const documentsApi = {
       formData
     );
   },
+
+  delete(projectId: string, documentId: string): Promise<void> {
+    return httpClient.delete(
+      `/projects/${encodeURIComponent(projectId)}/documents/${encodeURIComponent(documentId)}`
+    );
+  },
 };

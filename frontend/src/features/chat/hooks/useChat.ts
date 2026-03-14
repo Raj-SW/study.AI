@@ -72,5 +72,15 @@ export function useChat(projectId: string | null) {
 
   const clearMessages = useCallback(() => setMessages([]), []);
 
-  return { messages, sendMessage, isLoading, clearMessages };
+  const clearHistory = useCallback(async () => {
+    if (!projectId) return;
+    try {
+      await chatApi.clearHistory(projectId);
+      setMessages([]);
+    } catch {
+      toast.error("Failed to clear chat history. Please try again.");
+    }
+  }, [projectId]);
+
+  return { messages, sendMessage, isLoading, clearMessages, clearHistory };
 }

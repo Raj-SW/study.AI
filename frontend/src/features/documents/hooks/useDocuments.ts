@@ -45,6 +45,22 @@ export function useDocuments(projectId: string | null) {
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: ({ documentId }: { documentId: string }) => {
+      if (!projectId) throw new Error("No project selected");
+      return documentsApi.delete(projectId, documentId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: documentsQueryKey(projectId!),
+      });
+      toast.success("Document deleted");
+    },
+    onError: () => {
+      toast.error("Failed to delete document. Please try again.");
+    },
+  });
+
   return {
     documents: query.data ?? [],
     isLoading: query.isLoading,
@@ -53,6 +69,8 @@ export function useDocuments(projectId: string | null) {
     refetch: query.refetch,
     uploadDocument: uploadMutation.mutateAsync,
     isUploading: uploadMutation.isPending,
+    deleteDocument: deleteMutation.mutateAsync,
+    isDeleting: deleteMutation.isPending,
   };
 }
 

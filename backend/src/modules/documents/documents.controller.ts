@@ -3,6 +3,7 @@ import * as documentsService from './documents.service';
 import * as projectsService from '../projects/projects.service';
 import { createStorageService } from '../../services/storage';
 import { ingestionService } from '../../services/ingestion/ingestion.service';
+import { deleteByDocument } from '../../services/ingestion/vectorStore';
 import { UnsupportedFileTypeError, FileTooLargeError, ValidationError } from '../../lib/errors';
 import { config } from '../../config';
 import { logger } from '../../lib/logger';
@@ -90,6 +91,37 @@ export async function uploadDocument(
         logger.error({ err, documentId: document.id }, 'Ingestion failed');
       }
     });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function deleteDocument(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const projectId = req.params.projectId as string;
+    const documentId = req.params.documentId as string;
+    const userId = req.user.id;
+
+    // Verify project ownership
+    await projectsService.verifyProjectOwnership(projectId, userId);
+
+    // Get filepath before deletion so we can remove the physical file
+    const filepath = await documentsService.getDocumentFilepath(documentId, userId);
+
+    // Delete vectors from pgvector
+    await deleteByDocument(documentId);
+
+    // Delete physical file from storage
+    await storage.delete(filepath);
+
+    // Delete DB record
+    await documentsService.deleteDocument(documentId, userId);
+
+    res.status(204).send();
   } catch (err) {
     next(err);
   }
