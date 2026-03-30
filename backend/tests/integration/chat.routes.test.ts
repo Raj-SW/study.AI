@@ -65,7 +65,7 @@ describe('Chat Routes', () => {
         .send({});
 
       expect(res.status).toBe(400);
-      expect(res.body.error).toMatch(/question/i);
+      expect(res.body.error.message).toMatch(/validation/i);
     });
 
     it('should return 400 when question is empty', async () => {

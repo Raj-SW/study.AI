@@ -59,7 +59,7 @@ export async function saveExchange(
         userId,
         role: 'ASSISTANT',
         content: result.answer,
-        sources: result.sources as any,
+        sources: result.sources satisfies ChatMessageResponse['sources'],
       },
     }),
   ]);

@@ -1,5 +1,5 @@
 import { getEmbeddings } from './ingestion/embeddings';
-import { getVectorStore } from './ingestion/vectorStore';
+import { similaritySearch } from './ingestion/vectorStore';
 import { config } from '../config';
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import { ChatOpenAI } from '@langchain/openai';
@@ -88,15 +88,13 @@ export async function answerQuestion({
 
   const queryEmbedding = await embeddings.embedQuery(queryText);
 
-  const vectorStore = await getVectorStore();
-
   const TOP_K = 10;
   const MIN_SCORE = 0.4;
 
   // Restrict retrieval to the current project for tenant isolation
-  const filter = { projectId } as const;
+  const filter = { projectId };
 
-  const results = await vectorStore.similaritySearchVectorWithScore(queryEmbedding, TOP_K, filter as any);
+  const results = await similaritySearch(queryEmbedding, TOP_K, filter);
 
   // Drop chunks below the relevance threshold to reduce noise
   const sources = results

@@ -1,8 +1,9 @@
-import { PGVectorStore } from '@langchain/community/vectorstores/pgvector';
+import { QdrantClient } from '@qdrant/js-client-rest';
 import { Document } from '@langchain/core/documents';
 import { getEmbeddings } from './embeddings';
 import { config } from '../../config';
 import { logger } from '../../lib/logger';
+import { randomUUID } from 'crypto';
 
 export interface VectorMetadata {
   userId: string;
@@ -12,84 +13,87 @@ export interface VectorMetadata {
   source: string;
 }
 
-function getPoolConfig(): { connectionString: string } {
-  return {
-    connectionString: config.DATABASE_URL,
-  };
-}
+let qdrantClient: QdrantClient | null = null;
 
-let vectorStoreInstance: PGVectorStore | null = null;
-
-export async function getVectorStore(): Promise<PGVectorStore> {
-  if (!vectorStoreInstance) {
-    vectorStoreInstance = await PGVectorStore.initialize(getEmbeddings(), {
-      postgresConnectionOptions: getPoolConfig(),
-      tableName: 'langchain_embeddings',
-      columns: {
-        idColumnName: 'id',
-        vectorColumnName: 'embedding',
-        contentColumnName: 'content',
-        metadataColumnName: 'metadata',
-      },
+function getClient(): QdrantClient {
+  if (!qdrantClient) {
+    qdrantClient = new QdrantClient({
+      url: config.QDRANT_URL,
+      apiKey: config.QDRANT_API_KEY,
     });
   }
-  return vectorStoreInstance;
+  return qdrantClient;
+}
+
+const COLLECTION = config.QDRANT_COLLECTION;
+
+/**
+ * Ensure the Qdrant collection exists; create it on first use.
+ */
+let collectionReady: Promise<void> | null = null;
+
+async function ensureCollection(vectorSize: number): Promise<void> {
+  const client = getClient();
+  const { collections } = await client.getCollections();
+  const exists = collections.some((c) => c.name === COLLECTION);
+  if (!exists) {
+    await client.createCollection(COLLECTION, {
+      vectors: { size: vectorSize, distance: 'Cosine' },
+    });
+    // Create payload indexes for filtered queries
+    await client.createPayloadIndex(COLLECTION, {
+      field_name: 'projectId',
+      field_schema: 'keyword',
+    });
+    await client.createPayloadIndex(COLLECTION, {
+      field_name: 'documentId',
+      field_schema: 'keyword',
+    });
+    logger.info({ collection: COLLECTION, vectorSize }, 'Qdrant collection created');
+  }
 }
 
 export async function upsertChunks(
   chunks: Document[],
   metadata: Omit<VectorMetadata, 'chunkIndex' | 'source'>,
 ): Promise<number> {
-  const vectorStore = await getVectorStore();
-
   // Delete existing vectors for this document (idempotent re-index)
   await deleteByDocument(metadata.documentId);
 
   // Add metadata to each chunk
-  const enrichedChunks = chunks.map((chunk, index) => {
-    return new Document({
-      pageContent: chunk.pageContent,
-      metadata: {
-        ...chunk.metadata,
-        userId: metadata.userId,
-        projectId: metadata.projectId,
-        documentId: metadata.documentId,
-        chunkIndex: index,
-        source: chunk.metadata.source ?? 'pdf',
-      } satisfies VectorMetadata & Record<string, unknown>,
-    });
-  });
+  const enrichedChunks = chunks.map((chunk, index) => ({
+    pageContent: chunk.pageContent,
+    metadata: {
+      ...chunk.metadata,
+      userId: metadata.userId,
+      projectId: metadata.projectId,
+      documentId: metadata.documentId,
+      chunkIndex: index,
+      source: chunk.metadata.source ?? 'pdf',
+    } as VectorMetadata & Record<string, unknown>,
+  }));
 
-  // Precompute embeddings so we can validate dimensions before inserting
+  // Precompute embeddings
   const texts = enrichedChunks.map((d) => d.pageContent);
 
-  // Retry wrapper + debug logging for embedder (helps diagnose empty/vector issues)
   const maxAttempts = 3;
   let embeddings: unknown = null;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      // call provider
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      // we keep the raw result in `embeddings` for deeper inspection in logs
-      // @ts-ignore
-      embeddings = await getEmbeddings().embedDocuments(texts as any);
+      embeddings = await getEmbeddings().embedDocuments(texts);
 
-      // Log a compact sample of the returned embeddings for debugging
       try {
-        const sample = Array.isArray(embeddings) ? (embeddings as any[]).slice(0, 3).map((e) => (Array.isArray(e) ? e.length : typeof e)) : typeof embeddings;
+        const sample = Array.isArray(embeddings) ? embeddings.slice(0, 3).map((e: any) => (Array.isArray(e) ? e.length : typeof e)) : typeof embeddings;
         logger.debug({ documentId: metadata.documentId, attempt, sample }, 'Embeddings response sample');
-      } catch (logErr) {
+      } catch {
         logger.debug({ documentId: metadata.documentId, attempt }, 'Embeddings response (unable to sample)');
       }
 
-      // Accept the response if it's an array (may still contain empty vectors)
       if (Array.isArray(embeddings)) break;
     } catch (err) {
       logger.warn({ err, documentId: metadata.documentId, attempt }, 'Embedding provider call failed');
     }
 
-    // backoff before retrying
-    // eslint-disable-next-line no-await-in-loop
     await new Promise((r) => setTimeout(r, attempt * 500));
   }
 
@@ -98,12 +102,12 @@ export async function upsertChunks(
     throw new Error('Invalid embeddings response from provider');
   }
 
-  // Validate embeddings: skip any empty vectors but continue with others.
+  // Validate embeddings
   const validEmbeddings: number[][] = [];
-  const validDocs: Document[] = [];
+  const validDocs: typeof enrichedChunks = [];
   const skippedIndices: number[] = [];
 
-  (embeddings as any[]).forEach((v, i) => {
+  (embeddings as number[][]).forEach((v, i) => {
     if (!Array.isArray(v) || v.length === 0) {
       skippedIndices.push(i);
     } else {
@@ -124,32 +128,120 @@ export async function upsertChunks(
     throw new Error('All embeddings empty — aborting upsert');
   }
 
-  // Insert precomputed vectors together with documents (avoids double-embedding)
-  await vectorStore.addVectors(validEmbeddings, validDocs);
+  // Ensure collection exists with correct vector size
+  if (!collectionReady) {
+    collectionReady = ensureCollection(validEmbeddings[0].length).catch((err) => {
+      collectionReady = null;
+      throw err;
+    });
+  }
+  await collectionReady;
+
+  // Build Qdrant points
+  const points = validDocs.map((doc, i) => ({
+    id: randomUUID(),
+    vector: validEmbeddings[i],
+    payload: {
+      content: doc.pageContent,
+      ...doc.metadata,
+    },
+  }));
+
+  const client = getClient();
+  // Upsert in batches of 100
+  const BATCH_SIZE = 100;
+  for (let i = 0; i < points.length; i += BATCH_SIZE) {
+    await client.upsert(COLLECTION, {
+      points: points.slice(i, i + BATCH_SIZE),
+    });
+  }
 
   logger.info(
-    { documentId: metadata.documentId, chunkCount: enrichedChunks.length },
-    'Vectors upserted',
+    { documentId: metadata.documentId, stored: validDocs.length, total: enrichedChunks.length },
+    'Vectors upserted to Qdrant',
   );
 
-  return enrichedChunks.length;
+  return validDocs.length;
+}
+
+export async function similaritySearch(
+  queryEmbedding: number[],
+  topK: number,
+  filter: Record<string, string>,
+): Promise<Array<[Document, number]>> {
+  if (!collectionReady) {
+    collectionReady = ensureCollection(queryEmbedding.length).catch((err) => {
+      collectionReady = null;
+      throw err;
+    });
+  }
+  await collectionReady;
+
+  const client = getClient();
+
+  // Build Qdrant filter from key-value pairs
+  const must = Object.entries(filter).map(([key, value]) => ({
+    key,
+    match: { value },
+  }));
+
+  const results = await client.search(COLLECTION, {
+    vector: queryEmbedding,
+    limit: topK,
+    with_payload: true,
+    filter: { must },
+  });
+
+  return results.map((r) => {
+    const payload = r.payload as Record<string, unknown>;
+    return [
+      new Document({
+        pageContent: String(payload.content ?? ''),
+        metadata: {
+          documentId: payload.documentId,
+          chunkIndex: payload.chunkIndex,
+          projectId: payload.projectId,
+          userId: payload.userId,
+          source: payload.source,
+        },
+      }),
+      r.score,
+    ] as [Document, number];
+  });
 }
 
 export async function deleteByDocument(documentId: string): Promise<void> {
-  const vectorStore = await getVectorStore();
-  await vectorStore.delete({ filter: { documentId } });
-  logger.info({ documentId }, 'Vectors deleted for document');
+  const client = getClient();
+  try {
+    await client.delete(COLLECTION, {
+      filter: {
+        must: [{ key: 'documentId', match: { value: documentId } }],
+      },
+    });
+    logger.info({ documentId }, 'Vectors deleted for document');
+  } catch (err: any) {
+    // Collection may not exist yet on first run
+    if (err?.status === 404) return;
+    throw err;
+  }
 }
 
 export async function deleteByProject(projectId: string): Promise<void> {
-  const vectorStore = await getVectorStore();
-  await vectorStore.delete({ filter: { projectId } });
-  logger.info({ projectId }, 'Vectors deleted for project');
+  const client = getClient();
+  try {
+    await client.delete(COLLECTION, {
+      filter: {
+        must: [{ key: 'projectId', match: { value: projectId } }],
+      },
+    });
+    logger.info({ projectId }, 'Vectors deleted for project');
+  } catch (err: any) {
+    if (err?.status === 404) return;
+    throw err;
+  }
 }
 
 export async function closeVectorStore(): Promise<void> {
-  if (vectorStoreInstance) {
-    await vectorStoreInstance.end();
-    vectorStoreInstance = null;
-  }
+  qdrantClient = null;
+  collectionReady = null;
 }

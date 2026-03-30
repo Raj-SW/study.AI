@@ -22,6 +22,9 @@ const envSchema = z.object({
   RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000),
   RATE_LIMIT_MAX: z.coerce.number().default(100),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+  QDRANT_URL: z.string().default('http://localhost:6333'),
+  QDRANT_COLLECTION: z.string().default('study_copilot'),
+  QDRANT_API_KEY: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

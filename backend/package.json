@@ -33,6 +33,7 @@
     "@langchain/openai": "^0.3.0",
     "@langchain/textsplitters": "^0.1.0",
     "@prisma/client": "^6.0.0",
+    "@qdrant/js-client-rest": "^1.17.0",
     "@types/pg": "^8.18.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.0",
