@@ -2,9 +2,37 @@ import { getEmbeddings } from './ingestion/embeddings';
 import { getVectorStore } from './ingestion/vectorStore';
 import { config } from '../config';
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
+import { ChatOpenAI } from '@langchain/openai';
 import { AIMessage, HumanMessage, SystemMessage, BaseMessage } from '@langchain/core/messages';
+import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { logger } from '../lib/logger';
 import type { ChatMessageResponse } from '../modules/chat/chat.types';
+
+function createLlm(maxTokens: number): BaseChatModel {
+  if (config.LLM_PROVIDER === 'openai') {
+    const isAida = Boolean(config.AIDA_BASE_URL);
+    return new ChatOpenAI({
+      apiKey: isAida ? 'aida' : config.OPENAI_API_KEY,
+      model: isAida ? config.AIDA_MODEL : 'gpt-4o',
+      maxTokens,
+      maxRetries: 1,
+      configuration: isAida ? {
+        baseURL: config.AIDA_BASE_URL,
+        defaultHeaders: {
+          'Aida-Team-Name': config.AIDA_TEAM_NAME,
+          'Aida-User-Name': config.AIDA_USER_NAME,
+          'Aida-Tool': config.AIDA_TOOL,
+        },
+      } : undefined,
+    }) as unknown as BaseChatModel;
+  }
+  return new ChatGoogleGenerativeAI({
+    apiKey: config.GOOGLE_API_KEY,
+    model: 'gemini-2.5-flash',
+    maxOutputTokens: maxTokens,
+    maxRetries: 1,
+  }) as unknown as BaseChatModel;
+}
 
 export interface AnswerResult {
   answer: string;
@@ -32,12 +60,7 @@ export async function answerQuestion({
   // HyDE: generate a hypothetical answer and embed it instead of the raw question.
   // Hypothetical answers are closer in embedding space to real document chunks,
   // which improves retrieval precision over short query strings.
-  const llm = new ChatGoogleGenerativeAI({
-    apiKey: config.GOOGLE_API_KEY,
-    model: 'gemini-2.5-flash',
-    maxOutputTokens: 256,
-    maxRetries: 1,
-  });
+  const llm = createLlm(256);
 
   let queryText = question;
   try {
@@ -116,12 +139,7 @@ export async function answerQuestion({
     content: `Question: ${question}\n\nContext:\n${context}`,
   });
 
-  const answerLlm = new ChatGoogleGenerativeAI({
-    apiKey: config.GOOGLE_API_KEY,
-    model: 'gemini-2.5-flash',
-    maxOutputTokens: 8192,
-    maxRetries: 1,
-  });
+  const answerLlm = createLlm(8192);
 
   let responseText = '';
   try {

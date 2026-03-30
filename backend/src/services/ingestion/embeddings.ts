@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { Embeddings } from '@langchain/core/embeddings';
+import { OpenAIEmbeddings } from '@langchain/openai';
 
 export interface EmbeddingsProvider {
   getEmbeddings(): Embeddings;
@@ -58,8 +59,27 @@ class GeminiEmbeddingsProvider implements EmbeddingsProvider {
   }
 }
 
+class OpenAIEmbeddingsProvider implements EmbeddingsProvider {
+  private instance: OpenAIEmbeddings | null = null;
+
+  getEmbeddings(): Embeddings {
+    if (!this.instance) {
+      const apiKey = process.env.OPENAI_API_KEY;
+      if (!apiKey) throw new Error('OPENAI_API_KEY is not set');
+      this.instance = new OpenAIEmbeddings({
+        apiKey,
+        model: 'text-embedding-3-large',
+      });
+    }
+    return this.instance;
+  }
+}
+
 // Select provider based on EMBEDDINGS_PROVIDER env var
 function createDefaultProvider(): EmbeddingsProvider {
+  if (process.env.EMBEDDINGS_PROVIDER === 'openai') {
+    return new OpenAIEmbeddingsProvider();
+  }
   return new GeminiEmbeddingsProvider();
 }
 
