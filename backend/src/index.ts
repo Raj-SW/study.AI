@@ -1,6 +1,6 @@
 // In dev: bypass corporate proxy TLS interception for BOTH https module AND fetch (undici).
 // NODE_TLS_REJECT_UNAUTHORIZED=0 only fixes the old https module — undici (used by
-// @langchain/google-genai's fetch calls) needs its own dispatcher.
+// @langchain/openai's fetch calls) needs its own dispatcher.
 if (process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0') {
   try {
     // undici is bundled with Node 18+ — no npm install needed

@@ -1,7 +1,6 @@
 import { getEmbeddings } from './ingestion/embeddings';
 import { similaritySearch } from './ingestion/vectorStore';
 import { config } from '../config';
-import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import { ChatOpenAI } from '@langchain/openai';
 import { AIMessage, HumanMessage, SystemMessage, BaseMessage } from '@langchain/core/messages';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
@@ -9,28 +8,20 @@ import { logger } from '../lib/logger';
 import type { ChatMessageResponse } from '../modules/chat/chat.types';
 
 function createLlm(maxTokens: number): BaseChatModel {
-  if (config.LLM_PROVIDER === 'openai') {
-    const isAida = Boolean(config.AIDA_BASE_URL);
-    return new ChatOpenAI({
-      apiKey: isAida ? 'aida' : config.OPENAI_API_KEY,
-      model: isAida ? config.AIDA_MODEL : 'gpt-4o',
-      maxTokens,
-      maxRetries: 1,
-      configuration: isAida ? {
-        baseURL: config.AIDA_BASE_URL,
-        defaultHeaders: {
-          'Aida-Team-Name': config.AIDA_TEAM_NAME,
-          'Aida-User-Name': config.AIDA_USER_NAME,
-          'Aida-Tool': config.AIDA_TOOL,
-        },
-      } : undefined,
-    }) as unknown as BaseChatModel;
-  }
-  return new ChatGoogleGenerativeAI({
-    apiKey: config.GOOGLE_API_KEY,
-    model: 'gemini-2.5-flash',
-    maxOutputTokens: maxTokens,
+  const isAida = Boolean(config.AIDA_BASE_URL);
+  return new ChatOpenAI({
+    apiKey: isAida ? 'aida' : config.OPENAI_API_KEY,
+    model: isAida ? config.AIDA_MODEL : 'gpt-4o',
     maxRetries: 1,
+    modelKwargs: { max_completion_tokens: maxTokens },
+    configuration: isAida ? {
+      baseURL: config.AIDA_BASE_URL,
+      defaultHeaders: {
+        'Aida-Team-Name': config.AIDA_TEAM_NAME,
+        'Aida-User-Name': config.AIDA_USER_NAME,
+        'Aida-Tool': config.AIDA_TOOL,
+      },
+    } : undefined,
   }) as unknown as BaseChatModel;
 }
 
