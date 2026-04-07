@@ -50,6 +50,16 @@ export function errorHandler(
     return;
   }
 
+  if (err.message === 'Only PDF files are allowed') {
+    res.status(415).json({
+      error: {
+        code: 'UNSUPPORTED_FILE_TYPE',
+        message: 'Unsupported file type. Allowed types: .pdf',
+      },
+    });
+    return;
+  }
+
   // Unknown errors
   logger.error({ err }, 'Unhandled error');
   res.status(500).json({

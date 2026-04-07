@@ -37,8 +37,6 @@ export function ChatMessage({ message }: ChatMessageProps) {
           </div>
         )}
       </div>
-
-
     </div>
   );
 }

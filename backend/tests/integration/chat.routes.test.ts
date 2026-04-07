@@ -27,7 +27,7 @@ jest.mock('../../src/lib/logger', () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), fatal: jest.fn() },
 }));
 
-// Mock RAG service so we don't need a real Gemini API key
+// Mock RAG service so we don't need a real OpenAI API key
 jest.mock('../../src/services/rag.service', () => ({
   answerQuestion: jest.fn<() => Promise<any>>().mockResolvedValue({
     answer: 'Paris is the capital of France.',

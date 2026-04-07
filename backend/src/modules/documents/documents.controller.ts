@@ -4,14 +4,11 @@ import * as projectsService from '../projects/projects.service';
 import { createStorageService } from '../../services/storage';
 import { ingestionService } from '../../services/ingestion/ingestion.service';
 import { deleteByDocument } from '../../services/ingestion/vectorStore';
-import { UnsupportedFileTypeError, FileTooLargeError, ValidationError } from '../../lib/errors';
+import { FileTooLargeError, ValidationError } from '../../lib/errors';
 import { config } from '../../config';
 import { logger } from '../../lib/logger';
 
 const storage = createStorageService();
-
-const ALLOWED_MIME_TYPES = ['application/pdf'];
-const ALLOWED_EXTENSIONS = ['.pdf'];
 
 export async function listDocuments(
   req: Request,
@@ -49,13 +46,7 @@ export async function uploadDocument(
       throw new ValidationError('No file provided');
     }
 
-    // Validate file type
-    const ext = '.' + file.originalname.split('.').pop()?.toLowerCase();
-    if (!ALLOWED_MIME_TYPES.includes(file.mimetype) || !ALLOWED_EXTENSIONS.includes(ext)) {
-      throw new UnsupportedFileTypeError(ALLOWED_EXTENSIONS);
-    }
-
-    // Validate file size
+    // Validate file size (multer limits are enforced first, but guard here too)
     if (file.size > config.MAX_FILE_SIZE_BYTES) {
       throw new FileTooLargeError(config.MAX_FILE_SIZE_MB);
     }
@@ -112,7 +103,7 @@ export async function deleteDocument(
     // Get filepath before deletion so we can remove the physical file
     const filepath = await documentsService.getDocumentFilepath(documentId, userId);
 
-    // Delete vectors from pgvector
+    // Delete vectors from Qdrant
     await deleteByDocument(documentId);
 
     // Delete physical file from storage

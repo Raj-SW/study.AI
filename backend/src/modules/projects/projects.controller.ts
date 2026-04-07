@@ -47,7 +47,7 @@ export async function deleteProject(
     // Collect all document file paths before cascade-deleting the project
     const filepaths = await documentsService.listDocumentFilepaths(projectId, userId);
 
-    // Delete all vectors for this project from pgvector
+    // Delete all vectors for this project from Qdrant
     await deleteByProject(projectId);
 
     // Delete all physical files from storage

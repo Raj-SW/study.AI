@@ -31,10 +31,10 @@ export async function handleChat(req: Request, res: Response, next: NextFunction
     const userId = req.user!.id;
     const { question } = req.body as { question: string };
 
+    await projectsService.verifyProjectOwnership(projectId, userId);
+
     // Load conversation history (last 20 messages = 10 turns)
     const history = await getHistory(projectId, userId);
-
-    await projectsService.verifyProjectOwnership(projectId, userId);
 
     // Generate answer with full history for context-aware follow-ups
     const result = await answerQuestion({ projectId, userId, question, history });

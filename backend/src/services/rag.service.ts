@@ -1,29 +1,8 @@
-import { getEmbeddings } from './ingestion/embeddings';
+import { getEmbeddings, createChatLlm } from './openai.provider';
 import { similaritySearch } from './ingestion/vectorStore';
-import { config } from '../config';
-import { ChatOpenAI } from '@langchain/openai';
 import { AIMessage, HumanMessage, SystemMessage, BaseMessage } from '@langchain/core/messages';
-import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { logger } from '../lib/logger';
 import type { ChatMessageResponse } from '../modules/chat/chat.types';
-
-function createLlm(maxTokens: number): BaseChatModel {
-  const isAida = Boolean(config.AIDA_BASE_URL);
-  return new ChatOpenAI({
-    apiKey: isAida ? 'aida' : config.OPENAI_API_KEY,
-    model: isAida ? config.AIDA_MODEL : 'gpt-4o',
-    maxRetries: 1,
-    modelKwargs: { max_completion_tokens: maxTokens },
-    configuration: isAida ? {
-      baseURL: config.AIDA_BASE_URL,
-      defaultHeaders: {
-        'Aida-Team-Name': config.AIDA_TEAM_NAME,
-        'Aida-User-Name': config.AIDA_USER_NAME,
-        'Aida-Tool': config.AIDA_TOOL,
-      },
-    } : undefined,
-  }) as unknown as BaseChatModel;
-}
 
 export interface AnswerResult {
   answer: string;
@@ -51,7 +30,7 @@ export async function answerQuestion({
   // HyDE: generate a hypothetical answer and embed it instead of the raw question.
   // Hypothetical answers are closer in embedding space to real document chunks,
   // which improves retrieval precision over short query strings.
-  const llm = createLlm(256);
+  const llm = createChatLlm(256);
 
   let queryText = question;
   try {
@@ -128,7 +107,7 @@ export async function answerQuestion({
     content: `Question: ${question}\n\nContext:\n${context}`,
   });
 
-  const answerLlm = createLlm(8192);
+  const answerLlm = createChatLlm(8192);
 
   let responseText = '';
   try {
@@ -148,5 +127,3 @@ export async function answerQuestion({
     sources,
   };
 }
-
-export default { answerQuestion };
