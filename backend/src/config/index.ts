@@ -10,13 +10,16 @@ const envSchema = z.object({
 
   // OpenAI — used directly or via AIDA proxy
   OPENAI_API_KEY: z.string().optional(),
-  OPENAI_CHAT_MODEL: z.string().default('gpt-5-mini'),
+  OPENAI_CHAT_MODEL: z.string(),
 
-  // Embeddings — local Ollama by default; set to OpenAI URL + key for cloud
-  EMBEDDINGS_BASE_URL: z.string().default('http://localhost:11434/v1'),
-  EMBEDDINGS_MODEL: z.string().default('nomic-embed-text'),
+  // Embeddings provider flag
+  EMBEDDINGS_PROVIDER: z.enum(['openai']).default('openai'),
+  EMBEDDINGS_MODEL: z.string(),
 
-  // AIDA corporate proxy (set AIDA_BASE_URL to enable; omit for direct OpenAI)
+  // LLM provider flag: 'aida' routes through corporate proxy, 'openai' goes direct
+  LLM_PROVIDER: z.enum(['openai', 'aida']).default('openai'),
+
+  // AIDA corporate proxy (required when LLM_PROVIDER=aida)
   AIDA_BASE_URL: z.string().optional(),
   AIDA_TEAM_NAME: z.string().default('testTeam'),
   AIDA_USER_NAME: z.string().default('testUser'),

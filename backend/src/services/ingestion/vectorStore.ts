@@ -91,7 +91,21 @@ export async function upsertChunks(
 
       if (Array.isArray(embeddings)) break;
     } catch (err) {
-      logger.warn({ err, documentId: metadata.documentId, attempt }, 'Embedding provider call failed');
+      const status = (err as any)?.status;
+      const message = err instanceof Error ? err.message : String(err);
+      const responseBody = (err as any)?.error ?? (err as any)?.body ?? null;
+      logger.warn(
+        {
+          documentId: metadata.documentId,
+          attempt,
+          embeddingsBaseURL: config.EMBEDDINGS_BASE_URL,
+          embeddingsModel: config.EMBEDDINGS_MODEL,
+          httpStatus: status,
+          errorMessage: message,
+          responseBody,
+        },
+        'Embedding provider call failed',
+      );
     }
 
     await new Promise((r) => setTimeout(r, attempt * 500));
