@@ -26,31 +26,43 @@ function getClient(): QdrantClient {
 }
 
 const COLLECTION = config.QDRANT_COLLECTION;
-
-/**
- * Ensure the Qdrant collection exists; create it on first use.
- */
-let collectionReady: Promise<void> | null = null;
-
 async function ensureCollection(vectorSize: number): Promise<void> {
   const client = getClient();
   const { collections } = await client.getCollections();
   const exists = collections.some((c) => c.name === COLLECTION);
-  if (!exists) {
-    await client.createCollection(COLLECTION, {
-      vectors: { size: vectorSize, distance: 'Cosine' },
-    });
-    // Create payload indexes for filtered queries
-    await client.createPayloadIndex(COLLECTION, {
-      field_name: 'projectId',
-      field_schema: 'keyword',
-    });
-    await client.createPayloadIndex(COLLECTION, {
-      field_name: 'documentId',
-      field_schema: 'keyword',
-    });
-    logger.info({ collection: COLLECTION, vectorSize }, 'Qdrant collection created');
+  if (exists) {
+    // Validate that the stored vector size matches; recreate if not
+    const info = await client.getCollection(COLLECTION);
+    const storedSize =
+      typeof info.config?.params?.vectors === 'object' &&
+      !Array.isArray(info.config.params.vectors) &&
+      'size' in info.config.params.vectors
+        ? (info.config.params.vectors as { size: number }).size
+        : null;
+    if (storedSize !== null && storedSize !== vectorSize) {
+      logger.warn(
+        { collection: COLLECTION, storedSize, requiredSize: vectorSize },
+        'Qdrant collection vector size mismatch — recreating collection',
+      );
+      await client.deleteCollection(COLLECTION);
+      // Fall through to create below
+    } else {
+      return;
+    }
   }
+  await client.createCollection(COLLECTION, {
+    vectors: { size: vectorSize, distance: 'Cosine' },
+  });
+  // Create payload indexes for filtered queries
+  await client.createPayloadIndex(COLLECTION, {
+    field_name: 'projectId',
+    field_schema: 'keyword',
+  });
+  await client.createPayloadIndex(COLLECTION, {
+    field_name: 'documentId',
+    field_schema: 'keyword',
+  });
+  logger.info({ collection: COLLECTION, vectorSize }, 'Qdrant collection created');
 }
 
 export async function upsertChunks(
@@ -98,7 +110,7 @@ export async function upsertChunks(
         {
           documentId: metadata.documentId,
           attempt,
-          embeddingsBaseURL: config.EMBEDDINGS_BASE_URL,
+          embeddingsBaseURL: config.EMBEDDINGS_PROVIDER_BASE_URL,
           embeddingsModel: config.EMBEDDINGS_MODEL,
           httpStatus: status,
           errorMessage: message,
@@ -142,14 +154,8 @@ export async function upsertChunks(
     throw new Error('All embeddings empty — aborting upsert');
   }
 
-  // Ensure collection exists with correct vector size
-  if (!collectionReady) {
-    collectionReady = ensureCollection(validEmbeddings[0].length).catch((err) => {
-      collectionReady = null;
-      throw err;
-    });
-  }
-  await collectionReady;
+  // Ensure collection exists with correct vector size (called every time; ensureCollection is idempotent)
+  await ensureCollection(validEmbeddings[0].length);
 
   // Build Qdrant points
   const points = validDocs.map((doc, i) => ({
@@ -183,13 +189,7 @@ export async function similaritySearch(
   topK: number,
   filter: Record<string, string>,
 ): Promise<Array<[Document, number]>> {
-  if (!collectionReady) {
-    collectionReady = ensureCollection(queryEmbedding.length).catch((err) => {
-      collectionReady = null;
-      throw err;
-    });
-  }
-  await collectionReady;
+  await ensureCollection(queryEmbedding.length);
 
   const client = getClient();
 
@@ -257,5 +257,4 @@ export async function deleteByProject(projectId: string): Promise<void> {
 
 export async function closeVectorStore(): Promise<void> {
   qdrantClient = null;
-  collectionReady = null;
 }

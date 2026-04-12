@@ -15,7 +15,7 @@ const envSchema = z.object({
   // Embeddings provider flag
   EMBEDDINGS_PROVIDER: z.enum(['openai']).default('openai'),
   EMBEDDINGS_MODEL: z.string(),
-
+  EMBEDDINGS_PROVIDER_BASE_URL: z.string(),
   // LLM provider flag: 'aida' routes through corporate proxy, 'openai' goes direct
   LLM_PROVIDER: z.enum(['openai', 'aida']).default('openai'),
 

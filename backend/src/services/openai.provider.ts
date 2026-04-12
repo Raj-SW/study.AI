@@ -43,10 +43,7 @@ let embeddingsInstance: OpenAIEmbeddings | null = null;
 
 export function getEmbeddings(): Embeddings {
   if (!embeddingsInstance) {
-    logger.info(
-      { provider: config.EMBEDDINGS_PROVIDER, model: config.EMBEDDINGS_MODEL },
-      'Embeddings: creating client',
-    );
+    console.log(`Using provider ${config.EMBEDDINGS_PROVIDER} with model: ${config.EMBEDDINGS_MODEL}`);
     embeddingsInstance = new OpenAIEmbeddings({
       apiKey: config.OPENAI_API_KEY ?? '',
       model: config.EMBEDDINGS_MODEL,
