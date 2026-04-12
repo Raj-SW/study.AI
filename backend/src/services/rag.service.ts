@@ -58,8 +58,8 @@ export async function answerQuestion({
 
   const queryEmbedding = await embeddings.embedQuery(queryText);
 
-  const TOP_K = 10;
-  const MIN_SCORE = 0.4;
+  const TOP_K = 20;
+  const MIN_SCORE = 0.25;
 
   // Restrict retrieval to the current project for tenant isolation
   const filter = { projectId };

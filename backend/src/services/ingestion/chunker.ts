@@ -2,9 +2,9 @@ import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 import { Document } from '@langchain/core/documents';
 import { logger } from '../../lib/logger';
 
-// ~200 tokens ≈ 800 chars — smaller chunks improve precision for structured/tabular data
-const DEFAULT_CHUNK_SIZE = 800;
-const DEFAULT_CHUNK_OVERLAP = 100;
+// ~400 tokens ≈ 1500 chars — larger chunks preserve more context per retrieval
+const DEFAULT_CHUNK_SIZE = 1500;
+const DEFAULT_CHUNK_OVERLAP = 200;
 
 export interface ChunkOptions {
   chunkSize?: number;
