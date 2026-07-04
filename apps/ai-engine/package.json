@@ -11,7 +11,10 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch --preserveWatchOutput",
-    "prepare": "npm run build"
+    "prepare": "npm run build",
+    "test": "jest",
+    "test:unit": "jest tests/unit",
+    "test:integration": "jest tests/integration"
   },
   "dependencies": {
     "@langchain/community": "^0.3.0",
@@ -27,8 +30,11 @@
     "zod": "^3.23.0"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/node": "^22.0.0",
     "@types/pdf-parse": "^1.1.4",
+    "jest": "^30.2.0",
+    "ts-jest": "^29.4.6",
     "typescript": "^5.6.0"
   }
 }
