@@ -6,12 +6,37 @@ node_modules/
 .env.*
 .env.local
 .env.*.local
+!.env.example
 
 # Logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
 
- # Build output
+# Build output
 dist/
 **/dist/
+build/
+**/build/
+coverage/
+**/coverage/
+*.tsbuildinfo
+
+# Backend
+uploads/
+.prisma/
+
+# Frontend
+test-results/
+playwright-report/
+.turbo/
+.vite/
+
+# IDEs and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+graphify-out/
