@@ -95,7 +95,7 @@ export type IngestState = typeof IngestStateAnnotation.State;
 // ---------------------------------------------------------------------------
 
 function routeOnError(state: IngestState, nextNode: string): string {
-  return state.error !== null ? 'handleError' : nextNode;
+  return state.error === null ? nextNode : 'handleError';
 }
 
 // ---------------------------------------------------------------------------

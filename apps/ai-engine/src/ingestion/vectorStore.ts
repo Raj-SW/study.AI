@@ -3,7 +3,7 @@ import { Document } from '@langchain/core/documents';
 import { getEmbeddings } from '../openai.provider';
 import { getAiConfig } from '../config';
 import { logger } from '../logger';
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 
 export interface VectorMetadata {
   userId: string;
@@ -70,6 +70,58 @@ async function ensureCollection(vectorSize: number): Promise<void> {
   logger.info({ collection: collectionName, vectorSize }, 'Qdrant collection created');
 }
 
+function logEmbeddingsSample(embeddings: unknown, documentId: string, attempt: number): void {
+  try {
+    const sample = Array.isArray(embeddings)
+      ? embeddings.slice(0, 3).map((e: any) => (Array.isArray(e) ? e.length : typeof e))
+      : typeof embeddings;
+    logger.debug({ documentId, attempt, sample }, 'Embeddings response sample');
+  } catch {
+    logger.debug({ documentId, attempt }, 'Embeddings response (unable to sample)');
+  }
+}
+
+function logEmbeddingError(err: unknown, documentId: string, attempt: number): void {
+  const status = (err as any)?.status;
+  const message = err instanceof Error ? err.message : String(err);
+  const responseBody = (err as any)?.error ?? (err as any)?.body ?? null;
+  logger.warn(
+    {
+      documentId,
+      attempt,
+      embeddingsBaseURL: getAiConfig().EMBEDDINGS_PROVIDER_BASE_URL,
+      embeddingsModel: getAiConfig().EMBEDDINGS_MODEL,
+      httpStatus: status,
+      errorMessage: message,
+      responseBody,
+    },
+    'Embedding provider call failed',
+  );
+}
+
+async function embedWithRetries(texts: string[], documentId: string): Promise<number[][]> {
+  const maxAttempts = 3;
+  let embeddings: unknown = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      embeddings = await getEmbeddings().embedDocuments(texts);
+      logEmbeddingsSample(embeddings, documentId, attempt);
+      if (Array.isArray(embeddings)) break;
+    } catch (err) {
+      logEmbeddingError(err, documentId, attempt);
+    }
+    await new Promise((r) => setTimeout(r, attempt * 500));
+  }
+
+  if (!Array.isArray(embeddings)) {
+    logger.error({ documentId, embeddings }, 'Invalid embeddings response from provider');
+    throw new Error('Invalid embeddings response from provider');
+  }
+
+  return embeddings as number[][];
+}
+
 export async function upsertChunks(
   chunks: Document[],
   metadata: Omit<VectorMetadata, 'chunkIndex' | 'source'>,
@@ -92,53 +144,14 @@ export async function upsertChunks(
 
   // Precompute embeddings
   const texts = enrichedChunks.map((d) => d.pageContent);
-
-  const maxAttempts = 3;
-  let embeddings: unknown = null;
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      embeddings = await getEmbeddings().embedDocuments(texts);
-
-      try {
-        const sample = Array.isArray(embeddings) ? embeddings.slice(0, 3).map((e: any) => (Array.isArray(e) ? e.length : typeof e)) : typeof embeddings;
-        logger.debug({ documentId: metadata.documentId, attempt, sample }, 'Embeddings response sample');
-      } catch {
-        logger.debug({ documentId: metadata.documentId, attempt }, 'Embeddings response (unable to sample)');
-      }
-
-      if (Array.isArray(embeddings)) break;
-    } catch (err) {
-      const status = (err as any)?.status;
-      const message = err instanceof Error ? err.message : String(err);
-      const responseBody = (err as any)?.error ?? (err as any)?.body ?? null;
-      logger.warn(
-        {
-          documentId: metadata.documentId,
-          attempt,
-          embeddingsBaseURL: getAiConfig().EMBEDDINGS_PROVIDER_BASE_URL,
-          embeddingsModel: getAiConfig().EMBEDDINGS_MODEL,
-          httpStatus: status,
-          errorMessage: message,
-          responseBody,
-        },
-        'Embedding provider call failed',
-      );
-    }
-
-    await new Promise((r) => setTimeout(r, attempt * 500));
-  }
-
-  if (!Array.isArray(embeddings)) {
-    logger.error({ documentId: metadata.documentId, embeddings }, 'Invalid embeddings response from provider');
-    throw new Error('Invalid embeddings response from provider');
-  }
+  const embeddings = await embedWithRetries(texts, metadata.documentId);
 
   // Validate embeddings
   const validEmbeddings: number[][] = [];
   const validDocs: typeof enrichedChunks = [];
   const skippedIndices: number[] = [];
 
-  (embeddings as number[][]).forEach((v, i) => {
+  embeddings.forEach((v, i) => {
     if (!Array.isArray(v) || v.length === 0) {
       skippedIndices.push(i);
     } else {
@@ -215,7 +228,7 @@ export async function similaritySearch(
     const payload = r.payload as Record<string, unknown>;
     return [
       new Document({
-        pageContent: String(payload.content ?? ''),
+        pageContent: typeof payload.content === 'string' ? payload.content : '',
         metadata: {
           documentId: payload.documentId,
           chunkIndex: payload.chunkIndex,

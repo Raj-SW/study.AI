@@ -23,6 +23,15 @@ export interface AnswerResult {
 export const TOP_K = 20;
 export const MIN_SCORE = 0.25;
 
+/** LangChain message `.content` can be a plain string or an array of content parts. */
+function extractMessageText(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content.map((c: any) => (typeof c === 'string' ? c : c.text ?? '')).join('');
+  }
+  return String(content);
+}
+
 export async function answerQuestion({
   projectId,
   userId,
@@ -50,12 +59,7 @@ export async function answerQuestion({
       ),
       new HumanMessage(question),
     ] as any);
-    const hydeText =
-      typeof hydeRes.content === 'string'
-        ? hydeRes.content
-        : Array.isArray(hydeRes.content)
-          ? hydeRes.content.map((c: any) => (typeof c === 'string' ? c : c.text ?? '')).join('')
-          : String(hydeRes.content);
+    const hydeText = extractMessageText(hydeRes.content);
     if (hydeText.trim().length > 0) {
       queryText = hydeText;
       logger.info({ projectId, userId }, 'HyDE query expansion applied');
@@ -118,11 +122,7 @@ export async function answerQuestion({
   let responseText = '';
   try {
     const res = await answerLlm.invoke([system, ...historyMessages, currentHuman] as any);
-    responseText = typeof res.content === 'string'
-      ? res.content
-      : Array.isArray(res.content)
-        ? res.content.map((c: any) => (typeof c === 'string' ? c : c.text ?? '')).join('')
-        : String(res.content);
+    responseText = extractMessageText(res.content);
   } catch (err) {
     logger.error({ err, projectId, userId }, 'LLM generation failed');
     throw err;
