@@ -4,7 +4,7 @@ A monorepo for the Student Study Copilot app — upload documents, index them, a
 
 ## Structure
 
-```
+```text
 apps/
   ai-engine/  AI library: RAG, ingestion pipeline, LLM/embeddings providers (LangChain, Qdrant)
   backend/    Node.js + TypeScript API (Express, Prisma) — consumes ai-engine

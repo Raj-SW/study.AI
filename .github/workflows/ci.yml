@@ -100,6 +100,10 @@ jobs:
     name: SonarCloud analysis
     runs-on: ubuntu-latest
     needs: [test]
+    # GitHub doesn't forward repo secrets to pull_request runs triggered from
+    # forks, so SONAR_CUBE_TOKEN would be empty there. Skip cleanly instead of
+    # hard-failing when it's unavailable.
+    if: ${{ secrets.SONAR_CUBE_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
         with:

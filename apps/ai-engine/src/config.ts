@@ -39,6 +39,14 @@ const envSchema = z.object({
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
     .default('info'),
+}).superRefine((cfg, ctx) => {
+  if (cfg.LLM_PROVIDER === 'aida' && !cfg.AIDA_BASE_URL) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['AIDA_BASE_URL'],
+      message: 'AIDA_BASE_URL is required when LLM_PROVIDER=aida',
+    });
+  }
 });
 
 export type AiConfig = z.infer<typeof envSchema>;

@@ -6,7 +6,7 @@ import { Document } from "@langchain/core/documents";
 jest.mock("../../src/openai.provider");
 jest.mock("../../src/ingestion/vectorStore");
 
-import { answerQuestion } from "../../src/rag.service";
+import { answerQuestion, TOP_K, MIN_SCORE } from "../../src/rag.service";
 import { getEmbeddings, createChatLlm } from "../../src/openai.provider";
 import { similaritySearch } from "../../src/ingestion/vectorStore";
 
@@ -40,8 +40,8 @@ describe("answerQuestion (integration)", () => {
   it("retrieves, filters by score threshold, and returns an answer with sources", async () => {
     mockedSimilaritySearch.mockResolvedValue([
       makeSource("doc-a", "Relevant chunk about cells.", 0.9),
-      makeSource("doc-b", "Barely relevant.", 0.3),
-      makeSource("doc-c", "Noise below threshold.", 0.1), // < MIN_SCORE (0.25) -> dropped
+      makeSource("doc-b", "Barely relevant.", MIN_SCORE + 0.05),
+      makeSource("doc-c", "Noise below threshold.", MIN_SCORE - 0.15), // < MIN_SCORE -> dropped
     ]);
 
     const result = await answerQuestion({
@@ -60,7 +60,7 @@ describe("answerQuestion (integration)", () => {
     expect(embedQuery).toHaveBeenCalledTimes(1);
     expect(mockedSimilaritySearch).toHaveBeenCalledWith(
       [0.1, 0.2, 0.3],
-      20,
+      TOP_K,
       { projectId: "p1" },
     );
     expect(invoke).toHaveBeenCalled();

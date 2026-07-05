@@ -108,7 +108,17 @@ function routeOnError(state: IngestState, nextNode: string): string {
  */
 export function createIngestionGraph(deps: IngestionGraphDeps) {
   async function markProcessing(state: IngestState): Promise<Partial<IngestState>> {
-    await deps.updateStatus({ documentId: state.documentId, status: 'PROCESSING' });
+    try {
+      await deps.updateStatus({ documentId: state.documentId, status: 'PROCESSING' });
+    } catch (err) {
+      // Non-fatal: the pipeline itself doesn't depend on this write succeeding,
+      // only status visibility does. Swallowing here (rather than rejecting
+      // graph.invoke()) lets parsing/chunking/embedding still run.
+      logger.error(
+        { documentId: state.documentId, err },
+        'Ingestion graph: failed to persist PROCESSING status',
+      );
+    }
     logger.info({ documentId: state.documentId, projectId: state.projectId }, 'Ingestion graph: markProcessing');
     return {};
   }
@@ -152,28 +162,48 @@ export function createIngestionGraph(deps: IngestionGraphDeps) {
   }
 
   async function markIndexed(state: IngestState): Promise<Partial<IngestState>> {
-    await deps.updateStatus({
-      documentId: state.documentId,
-      status: 'INDEXED',
-      chunkCount: state.chunkCount,
-    });
     logger.info(
       { documentId: state.documentId, chunkCount: state.chunkCount },
       'Ingestion graph: INDEXED',
     );
+    try {
+      await deps.updateStatus({
+        documentId: state.documentId,
+        status: 'INDEXED',
+        chunkCount: state.chunkCount,
+      });
+    } catch (err) {
+      // Embedding already succeeded — don't reject graph.invoke() over a
+      // status-write failure. The document may be left stuck at PROCESSING;
+      // logged distinctly so it's reconcilable, since the graph has no
+      // retry/reconciliation mechanism of its own.
+      logger.error(
+        { documentId: state.documentId, chunkCount: state.chunkCount, err },
+        'Ingestion graph: failed to persist INDEXED status — document may be stuck at PROCESSING',
+      );
+    }
     return {};
   }
 
   async function handleError(state: IngestState): Promise<Partial<IngestState>> {
-    await deps.updateStatus({
-      documentId: state.documentId,
-      status: 'FAILED',
-      error: state.error ?? 'Unknown ingestion error',
-    });
+    // Log the original ingestion error first — a persistence failure below
+    // must never hide it.
     logger.error(
       { documentId: state.documentId, error: state.error },
       'Ingestion graph: FAILED',
     );
+    try {
+      await deps.updateStatus({
+        documentId: state.documentId,
+        status: 'FAILED',
+        error: state.error ?? 'Unknown ingestion error',
+      });
+    } catch (err) {
+      logger.error(
+        { documentId: state.documentId, originalError: state.error, persistError: err },
+        'Ingestion graph: failed to persist FAILED status',
+      );
+    }
     return {};
   }
 

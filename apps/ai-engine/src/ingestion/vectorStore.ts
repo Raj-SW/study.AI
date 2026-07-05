@@ -32,11 +32,12 @@ function collection(): string {
 }
 async function ensureCollection(vectorSize: number): Promise<void> {
   const client = getClient();
+  const collectionName = collection();
   const { collections } = await client.getCollections();
-  const exists = collections.some((c) => c.name === collection());
+  const exists = collections.some((c) => c.name === collectionName);
   if (exists) {
     // Validate that the stored vector size matches; recreate if not
-    const info = await client.getCollection(collection());
+    const info = await client.getCollection(collectionName);
     const storedSize =
       typeof info.config?.params?.vectors === 'object' &&
       !Array.isArray(info.config.params.vectors) &&
@@ -45,28 +46,28 @@ async function ensureCollection(vectorSize: number): Promise<void> {
         : null;
     if (storedSize !== null && storedSize !== vectorSize) {
       logger.warn(
-        { collection: collection(), storedSize, requiredSize: vectorSize },
+        { collection: collectionName, storedSize, requiredSize: vectorSize },
         'Qdrant collection vector size mismatch — recreating collection',
       );
-      await client.deleteCollection(collection());
+      await client.deleteCollection(collectionName);
       // Fall through to create below
     } else {
       return;
     }
   }
-  await client.createCollection(collection(), {
+  await client.createCollection(collectionName, {
     vectors: { size: vectorSize, distance: 'Cosine' },
   });
   // Create payload indexes for filtered queries
-  await client.createPayloadIndex(collection(), {
+  await client.createPayloadIndex(collectionName, {
     field_name: 'projectId',
     field_schema: 'keyword',
   });
-  await client.createPayloadIndex(collection(), {
+  await client.createPayloadIndex(collectionName, {
     field_name: 'documentId',
     field_schema: 'keyword',
   });
-  logger.info({ collection: collection(), vectorSize }, 'Qdrant collection created');
+  logger.info({ collection: collectionName, vectorSize }, 'Qdrant collection created');
 }
 
 export async function upsertChunks(
