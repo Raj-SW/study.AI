@@ -40,7 +40,7 @@ the PR when branch protection is enabled).
 
 One file: `.github/workflows/ci.yml`.
 
-```
+```text
 pull_request / push(main)
         │
    ┌────┴─────┐

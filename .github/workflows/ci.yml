@@ -103,7 +103,12 @@ jobs:
     # GitHub doesn't forward repo secrets to pull_request runs triggered from
     # forks, so SONAR_CUBE_TOKEN would be empty there. Skip cleanly instead of
     # hard-failing when it's unavailable.
-    if: ${{ secrets.SONAR_CUBE_TOKEN != '' }}
+    # NOTE: `secrets` is not a valid context in a job-level `if:` (only
+    # `github`/`needs`/`vars`/`inputs` are) — using it here breaks the entire
+    # workflow's schema validation, causing GitHub to run zero jobs. Check the
+    # fork status via `github` instead, which is what actually determines
+    # whether secrets get forwarded.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - uses: actions/checkout@v4
         with:
