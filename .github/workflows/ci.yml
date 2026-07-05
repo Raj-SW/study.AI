@@ -29,6 +29,13 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Run ${{ matrix.app }} ${{ matrix.type }} tests
+        # Backend's config validation (src/config/index.ts) requires these three
+        # non-secret fields with no defaults; only integration tests load src/app.ts
+        # (and therefore this validation) — unit tests never touch it.
+        env:
+          OPENAI_CHAT_MODEL: gpt-4o-mini
+          EMBEDDINGS_MODEL: text-embedding-3-small
+          EMBEDDINGS_PROVIDER_BASE_URL: https://api.openai.com/v1
         run: >
           npm run ${{ matrix.script }} --workspace=apps/${{ matrix.app }}
           -- --coverage --coverageDirectory=coverage/${{ matrix.type }}
@@ -50,6 +57,10 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Run backend e2e tests
+        env:
+          OPENAI_CHAT_MODEL: gpt-4o-mini
+          EMBEDDINGS_MODEL: text-embedding-3-small
+          EMBEDDINGS_PROVIDER_BASE_URL: https://api.openai.com/v1
         run: npm run test:e2e --workspace=apps/backend
 
   frontend-e2e:
@@ -102,7 +113,7 @@ jobs:
       - name: SonarCloud scan
         uses: SonarSource/sonarqube-scan-action@v4
         env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_CUBE_TOKEN }}
         with:
           args: >
             -Dsonar.qualitygate.wait=true
