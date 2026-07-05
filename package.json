@@ -1,0 +1,29 @@
+{
+  "name": "study-ai",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n ai,api,web -c cyan,green,magenta \"npm:dev:ai\" \"npm:dev:backend\" \"npm:dev:frontend\"",
+    "dev:ai": "npm run dev --workspace=apps/ai-engine",
+    "dev:backend": "npm run dev --workspace=apps/backend",
+    "dev:frontend": "npm run dev --workspace=apps/frontend",
+    "build": "npm run build --workspace=apps/ai-engine && npm run build --workspace=apps/backend && npm run build --workspace=apps/frontend",
+    "build:all": "npm run build",
+    "build:ai": "npm run build --workspace=apps/ai-engine",
+    "build:backend": "npm run build --workspace=apps/backend",
+    "build:frontend": "npm run build --workspace=apps/frontend",
+    "test": "npm run test --workspaces --if-present",
+    "test:all": "npm run test",
+    "test:backend": "npm run test --workspace=apps/backend",
+    "test:frontend": "npm run test --workspace=apps/frontend",
+    "lint": "npm run lint --workspaces --if-present",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.3",
+    "zod": "^4.4.3"
+  }
+}

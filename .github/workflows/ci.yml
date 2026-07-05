@@ -1,0 +1,128 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  # One check per app × test-type (ai-engine/backend/frontend × unit/integration).
+  # Each runs its slice in isolation and emits an lcov report for SonarCloud.
+  test:
+    name: ${{ matrix.app }} · ${{ matrix.type }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { app: ai-engine, type: unit,        script: "test:unit" }
+          - { app: ai-engine, type: integration, script: "test:integration" }
+          - { app: backend,   type: unit,        script: "test:unit" }
+          - { app: backend,   type: integration, script: "test:integration:ci" }
+          - { app: frontend,  type: unit,        script: "test:unit" }
+          - { app: frontend,  type: integration, script: "test:integration" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Run ${{ matrix.app }} ${{ matrix.type }} tests
+        # Backend's config validation (src/config/index.ts) requires these three
+        # non-secret fields with no defaults; only integration tests load src/app.ts
+        # (and therefore this validation) — unit tests never touch it.
+        env:
+          OPENAI_CHAT_MODEL: gpt-4o-mini
+          EMBEDDINGS_MODEL: text-embedding-3-small
+          EMBEDDINGS_PROVIDER_BASE_URL: https://api.openai.com/v1
+        run: >
+          npm run ${{ matrix.script }} --workspace=apps/${{ matrix.app }}
+          -- --coverage --coverageDirectory=coverage/${{ matrix.type }}
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.app }}-${{ matrix.type }}
+          path: apps/${{ matrix.app }}/coverage/${{ matrix.type }}/lcov.info
+          if-no-files-found: error
+
+  backend-e2e:
+    name: backend · e2e
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Run backend e2e tests
+        env:
+          OPENAI_CHAT_MODEL: gpt-4o-mini
+          EMBEDDINGS_MODEL: text-embedding-3-small
+          EMBEDDINGS_PROVIDER_BASE_URL: https://api.openai.com/v1
+        run: npm run test:e2e --workspace=apps/backend
+
+  frontend-e2e:
+    name: frontend · e2e
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Install Playwright browser (Chromium)
+        run: npx playwright install --with-deps chromium
+        working-directory: apps/frontend
+      - name: Run frontend e2e tests (Chromium)
+        run: npm run test:e2e --workspace=apps/frontend -- --project=chromium
+
+  frontend-lint:
+    name: frontend · lint (advisory)
+    runs-on: ubuntu-latest
+    # Advisory only: there are pre-existing lint violations. This surfaces them
+    # without blocking the workflow. Flip `continue-on-error` off once the
+    # backlog is cleared to make lint a required gate.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Lint frontend
+        run: npm run lint --workspace=apps/frontend
+
+  sonar:
+    name: SonarCloud analysis
+    runs-on: ubuntu-latest
+    needs: [test]
+    # GitHub doesn't forward repo secrets to pull_request runs triggered from
+    # forks, so SONAR_CUBE_TOKEN would be empty there. Skip cleanly instead of
+    # hard-failing when it's unavailable.
+    # NOTE: `secrets` is not a valid context in a job-level `if:` (only
+    # `github`/`needs`/`vars`/`inputs` are) — using it here breaks the entire
+    # workflow's schema validation, causing GitHub to run zero jobs. Check the
+    # fork status via `github` instead, which is what actually determines
+    # whether secrets get forwarded.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Sonar needs full history for accurate new-code detection.
+          fetch-depth: 0
+      - name: Download all coverage reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-*
+          path: coverage-reports
+      - name: SonarCloud scan
+        uses: SonarSource/sonarqube-scan-action@v4
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_CUBE_TOKEN }}
+        with:
+          args: >
+            -Dsonar.qualitygate.wait=true
